@@ -20,35 +20,26 @@ def image_by_name(img_name):
     """
     Returns a list of image data for images which match img_name.
     """
-    def _decompose(compound_name):
-        """ '[reg/]repo[:tag]' -> (reg, repo, tag) """
-        reg, repo, tag = '', compound_name, ''
-        if '/' in repo:
-            reg, repo = repo.split('/', 1)
-        if ':' in repo:
-            repo, tag = repo.rsplit(':', 1)
-        return reg, repo, tag
+    def _repo_tag_matches(tag, name):
+        """
+        Returns whether a tag matches an image, e.g.
+        "registry/user/image:tag" will be matched by "image", "user/image",
+        "registry/user/image", with or without appended ":tag".
+        """
+        return any([matches(tag, '*/'+name+':*'),
+                    matches(tag, '*/'+name),
+                    matches(tag, name+':*'),
+                    matches(tag, name)])
+
+    def _repo_tags_match(tags, name):
+        return any([_repo_tag_matches(tag, name) for tag in tags])
 
     c = docker.Client()
 
-    i_reg, i_rep, i_tag = _decompose(img_name)
-    # Correct for bash-style matching expressions.
-    if not i_reg:
-        i_reg = '*'
-    if not i_tag:
-        i_tag = '*'
-
     images = c.images(all=False)
     valid_images = []
-    for i in images:
-        for t in i['RepoTags']:
-            reg, rep, tag = _decompose(t)
-            if matches(reg, i_reg) \
-                    and matches(rep, i_rep) \
-                    and matches(tag, i_tag):
-                valid_images.append(i)
-                break
-    return valid_images
+
+    return [i for i in images if _repo_tags_match(i['RepoTags'], img_name)]
 
 
 def subp(cmd):
